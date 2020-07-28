@@ -1,12 +1,13 @@
-﻿using System.Collections.Generic;
+﻿using Assets.Scripts;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
-public class Octree {
+public class Octree<T> {
     public int Capacity = 5;
     public Bounds Bounds;
-    public List<Vector3> Points;
-    public List<Octree> Subdivisions;
+    public List<OctreeData<T>> Points;
+    public List<Octree<T>> Subdivisions;
 
     bool Subdivided = false;
 
@@ -14,16 +15,16 @@ public class Octree {
     {
         Bounds = bounds;
         Capacity = capacity;
-        Points = new List<Vector3>();
+        Points = new List<OctreeData<T>>();
     }
 
-    public bool InsertPoint(Vector3 point)
+    public bool InsertPoint(OctreeData<T> octreeData)
     {
-        if (Bounds.Contains(point))
+        if (Bounds.Contains(octreeData.Point))
         {
             if (Points.Count < Capacity)
             {
-                Points.Add(point);
+                Points.Add(octreeData);
                 return true;
             }
             else
@@ -33,18 +34,18 @@ public class Octree {
                     Subdivide();
                 }
 
-                return InsertPointIntoSubdivision(point);
+                return InsertPointIntoSubdivision(octreeData);
             }
         }
 
         return false;
     }
 
-    private bool InsertPointIntoSubdivision(Vector3 point)
+    private bool InsertPointIntoSubdivision(OctreeData<T> octreeData)
     {
         foreach (var subdivision in Subdivisions)
         {
-            if (subdivision.InsertPoint(point))
+            if (subdivision.InsertPoint(octreeData))
             {
                 return true;
             }
@@ -55,7 +56,7 @@ public class Octree {
 
     protected void Subdivide()
     {
-        Subdivisions = new List<Octree>();
+        Subdivisions = new List<Octree<T>>();
 
         for (int x = 0; x < 2; x++)
         {
@@ -75,7 +76,7 @@ public class Octree {
                         center = Bounds.center + offset
                     };
 
-                    var octree = new Octree(Capacity, bounds);
+                    var octree = new Octree<T>(Capacity, bounds);
 
                     Subdivisions.Add(octree);
                 }
@@ -85,13 +86,13 @@ public class Octree {
         Subdivided = true;
     }
 
-    public List<Vector3> Query(Bounds bounds) 
+    public List<OctreeData<T>> Query(Bounds bounds) 
     {
-        var points = new List<Vector3>();
+        var points = new List<OctreeData<T>>();
 
         if(bounds.Intersects(this.Bounds))
         {
-            points.AddRange(this.Points.Where(point => bounds.Contains(point)));
+            points.AddRange(this.Points);
 
             if (Subdivided)
             {
@@ -109,7 +110,7 @@ public class Octree {
     {        
         if (Bounds == null) return;
 
-        Gizmos.color = Color.green;
+        Gizmos.color = new Color(0, 255, 0, 0.1f);
         Gizmos.DrawWireCube(Bounds.center, Bounds.size);
 
         if (Subdivisions != null)

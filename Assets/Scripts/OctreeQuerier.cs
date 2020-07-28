@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 [RequireComponent(typeof(BoxCollider))]
@@ -17,7 +18,9 @@ public class OctreeQuerier : MonoBehaviour
 
     void Update()
     {
-        Points = Octree.Octree.Query(Bounds.bounds);
+        Points = Octree.Octree.Query(Bounds.bounds)
+                              .Select(x => x.Point)
+                              .ToList();
     }
 
     private void OnDrawGizmos()

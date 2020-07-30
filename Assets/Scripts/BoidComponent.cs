@@ -15,10 +15,12 @@ public class BoidComponent : MonoBehaviour {
     }
 
     public void Update()
-    {        
+    {
+        return;
+
         if (Boid.Equals(default(Boid))) return;
 
-        Boid.Update();
+        //Boid.Update();
 
         transform.position = Boid.Pos;
         transform.forward = Boid.Vel;

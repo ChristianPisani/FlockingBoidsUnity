@@ -90,7 +90,7 @@ public struct Octree<T> where T : struct {
         Subdivided = true;
     }
 
-    public List<OctreeData<T>> Query(Bounds bounds)
+    public List<OctreeData<T>> Query(Bounds bounds, int maxPoints)
     {
         var points = new List<OctreeData<T>>();
 
@@ -102,7 +102,9 @@ public struct Octree<T> where T : struct {
             {
                 foreach (var subdivision in Subdivisions)
                 {
-                    points.AddRange(subdivision.Query(bounds));
+                    points.AddRange(subdivision.Query(bounds, maxPoints));
+
+                    if (points.Count >= maxPoints) return points;
                 }
             }
         }

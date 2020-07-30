@@ -18,7 +18,7 @@ public class OctreeQuerier : MonoBehaviour
 
     void Update()
     {
-        Points = Octree.Octree.Query(Bounds.bounds)
+        Points = Octree.Octree.Query(Bounds.bounds, int.MaxValue)
                               .Select(x => x.Point)
                               .ToList();
     }

@@ -2,28 +2,23 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Boid {
+public struct Boid {
     public Vector3 Pos;
     public Vector3 Vel;
     public Vector3 Acl;
+    
+    public float AvgSpeedMod;
+    public float CohesionMod;
+    public float SeparationMod;
 
-    public float AvgSpeedMod = 1f;
-    public float CohesionMod = 1f;
-    public float SeparationMod = 1f;
-
-    public float MaxForce = 0.2f;
-    public float MaxSpeed = 8f;
-    public float MinSpeed = 3f;
-    public float PerceptionRadius = 5f;
-
-    public Boid(Vector3 pos)
-    {
-        Pos = pos;
-        Vector3 rndAcl = new Vector3().RandomPoint(Vector3.one * MaxSpeed) + Vector3.one * MinSpeed;
-    }
+    public float MaxSpeed;
+    public float MinSpeed;
+    public float MaxForce;
+    public float PerceptionRadius;
 
     public void Update()
     {
+        
         Vel = Vector3.ClampMagnitude(Vel, MaxSpeed);
         Acl = Vector3.ClampMagnitude(Acl, MaxForce);
 
@@ -31,7 +26,7 @@ public class Boid {
 
         Vel += Acl;
         Acl = Vector3.zero;
-
+        
         if (Vel.magnitude < MinSpeed)
         {
             if (Vel == Vector3.zero)
@@ -56,7 +51,7 @@ public class Boid {
         foreach (Boid boid in others)
         {            
             float distance = Vector3.Distance(Pos, boid.Pos);
-            if (boid != this && distance < PerceptionRadius)
+            if (!boid.Equals(this) && distance < PerceptionRadius)
             {
                 avgSpeed += boid.Vel;
                 cohesion += boid.Pos;
@@ -116,7 +111,7 @@ public class Boid {
             var boid = octreeData.AttachedObject;
 
             float distance = Vector3.Distance(Pos, boid.Pos);
-            if (boid != this && distance < PerceptionRadius)
+            if (!boid.Equals(this) && distance < PerceptionRadius && distance > 0)
             {
                 avgSpeed += boid.Vel;
                 cohesion += boid.Pos;

@@ -1,6 +1,8 @@
 ﻿using Assets.Scripts;
 using System.Collections.Generic;
 using System.Linq;
+using Unity.Collections;
+using Unity.Jobs;
 using UnityEngine;
 
 [RequireComponent(typeof(BoxCollider))]
@@ -9,6 +11,7 @@ public class Flock : MonoBehaviour {
     public int OctreeCapacity = 5;
     public float MaxSpeed = 5f;
     public float MinSpeed = 1f;
+    public float MaxForce = 5f;
     public float PerceptionRadius = 2f;
     public bool Debugging = false;
     public bool UseOctree = true;
@@ -21,9 +24,11 @@ public class Flock : MonoBehaviour {
     BoxCollider Bounds;
     public Color Color;
 
-    Octree<Boid> Octree;
-
+    public static Octree<Boid> Octree { get; private set; }
+    
     public int Amount;
+
+    public bool UseECS = true;
 
     public void Start()
     {
@@ -33,7 +38,7 @@ public class Flock : MonoBehaviour {
     }
 
     public void Reset()
-    {
+    {        
         if (BoidComponents != null)
         {
             foreach (var boid in BoidComponents)
@@ -48,16 +53,17 @@ public class Flock : MonoBehaviour {
 
         for (int i = 0; i < Amount; i++)
         {
-            Vector3 rndCoords = transform.position.RandomPoint(Bounds.size);
-
+            Vector3 rndCoords = transform.position.RandomPoint(Bounds.bounds.size);
+             
             var boid = Instantiate(Boid, transform, true);
             boid.transform.position = rndCoords;
 
             var boidComponent = boid.GetComponent<BoidComponent>();
-            boidComponent.Spawn();
             boidComponent.Boid.PerceptionRadius = PerceptionRadius;
             boidComponent.Boid.MaxSpeed = MaxSpeed;
             boidComponent.Boid.MinSpeed = MinSpeed;
+            boidComponent.Boid.MaxForce = MaxForce;
+            boidComponent.Spawn();
 
             BoidComponents.Add(boidComponent);
             Octree.InsertPoint(new OctreeData<Boid>()
@@ -69,42 +75,77 @@ public class Flock : MonoBehaviour {
     }
 
     public void Update()
-    {
-        Octree = new Octree<Boid>(OctreeCapacity, Bounds.bounds);
-
-        var boidCopies = new List<Boid>();
-
-        foreach (var boid in BoidComponents)
+    {                
+        if (UseECS)
+        {            
+            ExecuteJob(BoidComponents.Select(x => x.Boid).ToArray());
+        } else
         {
-            boid.Boid.AvgSpeedMod = AvgSpeedMod;
-            boid.Boid.CohesionMod = CohesionMod;
-            boid.Boid.SeparationMod = SeparationMod;
+            Octree = new Octree<Boid>(OctreeCapacity, Bounds.bounds);
 
-            Octree.InsertPoint(new OctreeData<Boid>()
+            var boidCopies = new List<Boid>();
+
+            foreach (var boid in BoidComponents)
             {
-                Point = boid.Boid.Pos,
-                AttachedObject = boid.Boid
-            });
+                boid.Boid.AvgSpeedMod = AvgSpeedMod;
+                boid.Boid.CohesionMod = CohesionMod;
+                boid.Boid.SeparationMod = SeparationMod;
 
-            boidCopies.Add(boid.Boid);
-        }
+                Octree.InsertPoint(new OctreeData<Boid>()
+                {
+                    Point = boid.Boid.Pos,
+                    AttachedObject = boid.Boid
+                });
 
-        foreach (BoidComponent boid in BoidComponents)
-        {
-            if (UseOctree)
-            {
-                var inRange = Octree
-                    .Query(new Bounds(boid.Boid.Pos, Vector3.one * boid.Boid.PerceptionRadius));
-
-                boid.Boid.Acl += boid.Boid.SteeringForce(inRange);
-            } else
-            {
-                boid.Boid.Acl += boid.Boid.SteeringForce(boidCopies);
+                boidCopies.Add(boid.Boid);
             }
-            boid.Boid.Update();
 
-            ConstrainToBounds(boid);
+            foreach (BoidComponent boid in BoidComponents)
+            {
+                if (UseOctree)
+                {
+                    var inRange = Octree
+                        .Query(new Bounds(boid.Boid.Pos, Vector3.one * boid.Boid.PerceptionRadius));
+
+                    boid.Boid.Acl += boid.Boid.SteeringForce(inRange);
+                }
+                else
+                {
+                    boid.Boid.Acl += boid.Boid.SteeringForce(boidCopies);
+                }
+                boid.Boid.Update();
+
+                ConstrainToBounds(boid);
+            }
         }
+    }
+
+    public void ExecuteJob(Boid[] boids)
+    {
+        var nativeBoids = new NativeArray<Boid>(boids, Allocator.TempJob);
+        
+        var flockJob = new FlockJob()
+        {
+            Boids = nativeBoids,
+            OctreeCapacity = OctreeCapacity,
+            Bounds = Bounds.bounds
+        };
+
+        var jobHandle = flockJob.Schedule(nativeBoids.Length, 24);
+        jobHandle.Complete();
+
+        for(int i = 0; i < nativeBoids.Length; i++)
+        {
+            BoidComponents[i].Boid = nativeBoids[i];
+
+            BoidComponents[i].Boid.AvgSpeedMod = AvgSpeedMod;
+            BoidComponents[i].Boid.CohesionMod = CohesionMod;
+            BoidComponents[i].Boid.SeparationMod = SeparationMod;
+
+            ConstrainToBounds(BoidComponents[i]);
+        }
+
+        nativeBoids.Dispose();
     }
 
     public void ConstrainToBounds(BoidComponent boid)
@@ -123,29 +164,28 @@ public class Flock : MonoBehaviour {
 
             if (!rayCast)
             {
-                if (Debugging) Debug.DrawRay(boid.Boid.Pos, -dir * 10000f, Color.red);
                 return;
             }
             else
             {
-                boid.Boid.Pos = Bounds.center;
+                boid.Boid.Pos = Bounds.bounds.center;
             }
-
-            if (Debugging) Debug.DrawRay(boid.Boid.Pos, -dir * 10000f, Color.green);
-
+            
             boid.Boid.Pos = hitInfo.point;
 
             if (!Bounds.bounds.Contains(boid.Boid.Pos))
             {
-                boid.Boid.Pos = Bounds.center;
+                boid.Boid.Pos = Bounds.bounds.center;
             }
         }
     }
 
     public void OnDrawGizmos()
     {
+        if (Bounds == null || Octree.Equals(default(Octree<Boid>))) return;
+
         Gizmos.color = Color.gray;
-        Gizmos.DrawWireCube(Bounds.center, Bounds.size);
+        Gizmos.DrawWireCube(transform.position, Bounds.bounds.size);
 
         if (Debugging)
         {

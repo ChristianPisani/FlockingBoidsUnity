@@ -1,21 +1,24 @@
 ﻿using Assets.Scripts;
 using System.Collections.Generic;
 using System.Linq;
+using Unity.Collections;
 using UnityEngine;
 
-public class Octree<T> {
-    public int Capacity = 5;
+public struct Octree<T> where T : struct {
+    public int Capacity;
     public Bounds Bounds;
     public List<OctreeData<T>> Points;
     public List<Octree<T>> Subdivisions;
 
-    bool Subdivided = false;
+    bool Subdivided;
 
     public Octree(int capacity, Bounds bounds)
     {
         Bounds = bounds;
         Capacity = capacity;
         Points = new List<OctreeData<T>>();
+        Subdivided = false;
+        Subdivisions = new List<Octree<T>>();
     }
 
     public bool InsertPoint(OctreeData<T> octreeData)
@@ -25,6 +28,7 @@ public class Octree<T> {
             if (Points.Count < Capacity)
             {
                 Points.Add(octreeData);
+
                 return true;
             }
             else
@@ -54,7 +58,7 @@ public class Octree<T> {
         return false;
     }
 
-    protected void Subdivide()
+    public void Subdivide()
     {
         Subdivisions = new List<Octree<T>>();
 
@@ -86,11 +90,11 @@ public class Octree<T> {
         Subdivided = true;
     }
 
-    public List<OctreeData<T>> Query(Bounds bounds) 
+    public List<OctreeData<T>> Query(Bounds bounds)
     {
         var points = new List<OctreeData<T>>();
 
-        if(bounds.Intersects(this.Bounds))
+        if (bounds.Intersects(this.Bounds))
         {
             points.AddRange(this.Points);
 
@@ -107,7 +111,7 @@ public class Octree<T> {
     }
 
     public void Draw()
-    {        
+    {
         if (Bounds == null) return;
 
         Gizmos.color = new Color(0, 255, 0, 0.1f);

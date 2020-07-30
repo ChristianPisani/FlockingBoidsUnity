@@ -11,20 +11,22 @@ public class OctreeGameObject : MonoBehaviour
     BoxCollider Bounds;
 
     [HideInInspector]
-    public Octree<object> Octree;
+    public Octree<Boid> Octree;
 
     void Start()
     {
         Bounds = GetComponent<BoxCollider>();
 
-        Octree = new Octree<object>(Capacity, Bounds.bounds);
+        Octree = new Octree<Boid>(Capacity, Bounds.bounds);
 
         InsertRandomPoints();
     }
 
     private void OnDrawGizmos()
     {
-        if (Octree == null) return;
+        return;
+
+        if (Octree.Equals(default(Octree<Boid>))) return;
 
         //Octree = new Octree(Capacity, Bounds.bounds);
 
@@ -38,7 +40,7 @@ public class OctreeGameObject : MonoBehaviour
         for (int i = 0; i < AmountOfPoints; i++)
         {
             var point = Octree.Bounds.center.RandomPoint(Octree.Bounds.size);
-            Octree.InsertPoint(new OctreeData<object>()
+            Octree.InsertPoint(new OctreeData<Boid>()
             {
                 Point = point
             });

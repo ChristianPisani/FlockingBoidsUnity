@@ -11,28 +11,34 @@ public class BoidComponent : MonoBehaviour {
 
     void Start()
     {
-        if (Boid == null) Spawn();
+        if (Boid.Equals(default(Boid))) Spawn();
     }
 
     public void Update()
-    {
-        if (Boid == null) return;
+    {        
+        if (Boid.Equals(default(Boid))) return;
 
         Boid.Update();
 
         transform.position = Boid.Pos;
-        transform.forward = Boid.Vel;        
+        transform.forward = Boid.Vel;
     }
 
     public void Spawn()
     {
-        Boid = new Boid(transform.position)
+        Boid = new Boid()
         {
-            Acl = new Vector3().RandomPoint(Vector3.one),
-            MaxForce = MaxForce,
+            Pos = transform.position,
+            Acl = Vector3.zero,
             MaxSpeed = MaxSpeed,
             MinSpeed = MinSpeed,
+            MaxForce = MaxForce,
             PerceptionRadius = PerceptionRadius
         };
+
+        while(Boid.Acl.magnitude < MinSpeed)
+        {
+            Boid.Acl = new Vector3().RandomPoint(Vector3.one * MaxSpeed);
+        }
     }
 }

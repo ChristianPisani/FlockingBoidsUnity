@@ -4,7 +4,7 @@ using UnityEngine;
 
 public struct Boid {
     public Vector3 PrevPos;
-    Vector3 CurPos;
+    public Vector3 CurPos;
     public Vector3 Pos;
     public Vector3 Vel;
     public Vector3 Acl;
@@ -21,9 +21,9 @@ public struct Boid {
     public Matrix4x4 matrix(Quaternion ModelRotation, Vector3 Scale)
     {
         var lookRotation = Vel != Vector3.zero ? Quaternion.LookRotation(Vel.normalized, Vector3.up) : Quaternion.identity;
-        
+
         return Matrix4x4.TRS(
-                    Pos,
+                    CurPos,
                     lookRotation * ModelRotation,
                     Scale);
     }

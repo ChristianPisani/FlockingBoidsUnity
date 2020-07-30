@@ -1,0 +1,72 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel SteeringForce
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWStructuredBuffer<Boid> Boids;
+
+RWStructuredBuffer<Boid> Others;
+int BoidAmount;
+
+struct Boid {
+	float3 position;
+	float3 direction;
+
+	float3 flockHeading;
+	float3 flockCentre;
+	float3 separationHeading;
+	int numFlockmates;
+};
+
+[numthreads(8,8,1)]
+void SteeringForce(uint3 id : SV_DispatchThreadID)
+{
+	float3 avgSpeed;
+	float3 cohesion;
+	float3 seperation;
+
+	int total = 0;
+
+	for(int i = 0; i < BoidAmount; i++)
+	{
+		Boid boid = Boids[i];
+
+		float distance = Vector3.Distance(Pos, boid.Pos);
+
+		float3 offset = boid.position - boids[id.x].position;
+		float sqrDst = offset.x * offset.x + offset.y * offset.y + offset.z * offset.z;
+
+		if (!boid.Equals(this) && distance < PerceptionRadius && distance > 0)
+		{
+			avgSpeed += boid.Vel;
+			cohesion += boid.Pos;
+
+			Vector3 diff = Pos - boid.Pos;
+			diff /= distance;
+			seperation += diff;
+
+			total++;
+		}
+	}
+
+	if (total > 0)
+	{
+		avgSpeed /= total;
+		avgSpeed -= Vel;
+
+		cohesion /= total;
+		cohesion -= Pos;
+
+		seperation /= total;
+	}
+
+	avgSpeed.Normalize();
+	cohesion.Normalize();
+	seperation.Normalize();
+
+	avgSpeed *= AvgSpeedMod;
+	cohesion *= CohesionMod;
+	seperation *= SeparationMod;
+
+	return avgSpeed + cohesion + seperation;
+}

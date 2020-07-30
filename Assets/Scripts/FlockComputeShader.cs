@@ -7,13 +7,12 @@ using UnityEditor;
 using UnityEngine;
 
 [RequireComponent(typeof(BoxCollider))]
-public class Flock : MonoBehaviour {
+public class FlockComputeShader : MonoBehaviour {
     public GameObject Boid;
     MeshFilter MeshFilter;
     Renderer Renderer;
 
-    public int BoidUpdateBatchSize = 1000;
-    int _boidUpdateBatchNum = 0;
+    public int Amount;
 
     public int MaxNeighBours = 12;
     public int OctreeCapacity = 5;
@@ -28,24 +27,20 @@ public class Flock : MonoBehaviour {
     public float CohesionMod = 1f;
     public float SeparationMod = 1f;
 
+    public ComputeShader ComputeShader;
+
     List<Boid> Boids;
-    List<Boid> TempBoids;
     BoxCollider Bounds;
-    public Color Color;
 
-    public static Octree<Boid> Octree { get; private set; }
-
-    public int Amount;
-
-    public bool UseECS = true;
+    public static Octree<Boid> Octree;
 
     public void Start()
-    {        
+    {
         this.Bounds = GetComponent<BoxCollider>();
         MeshFilter = Boid.GetComponentInChildren<MeshFilter>();
         Renderer = Boid.GetComponentInChildren<Renderer>();
 
-        InvokeRepeating(nameof(CreateOctree), 0, 4);
+        InvokeRepeating("CreateOctree", 0, 1);
 
         Reset();
     }
@@ -85,17 +80,51 @@ public class Flock : MonoBehaviour {
         }
     }
 
+    public void Compute()
+    {
+        /*
+        var boidBuffer = new ComputeBuffer(Boids.Count, BoidData.Size);
+        boidBuffer.SetData(boidData);
+
+        ComputeShader.SetBuffer(0, "boids", boidBuffer);
+        ComputeShader.SetInt("numBoids", boids.Length);
+        ComputeShader.SetFloat("viewRadius", settings.perceptionRadius);
+        ComputeShader.SetFloat("avoidRadius", settings.avoidanceRadius);
+
+        int threadGroups = Mathf.CeilToInt(numBoids / (float)threadGroupSize);
+        ComputeShader.Dispatch(0, threadGroups, 1, 1);
+
+        boidBuffer.GetData(boidData);
+
+        for (int i = 0; i < boids.Length; i++)
+        {
+            boids[i].avgFlockHeading = boidData[i].flockHeading;
+            boids[i].centreOfFlockmates = boidData[i].flockCentre;
+            boids[i].avgAvoidanceHeading = boidData[i].avoidanceHeading;
+            boids[i].numPerceivedFlockmates = boidData[i].numFlockmates;
+
+            boids[i].UpdateBoid();
+        }
+
+        boidBuffer.Release();
+        */
+    }
+
     public void Update()
     {
-        UpdateBoids();
-        Draw();
+
+        //var ShaderData = CreateShaderData();
+
+        //UpdateBoids();
+
+        //Draw();
     }
 
     public void CreateOctree()
     {
         Octree = new Octree<Boid>(OctreeCapacity, Bounds.bounds);
 
-        foreach (var boid in Boids)
+        foreach(var boid in Boids)
         {
             Octree.InsertPoint(new OctreeData<Boid>()
             {
@@ -105,116 +134,29 @@ public class Flock : MonoBehaviour {
         }
     }
 
-    public void UpdateBoids()
+    public List<BoidShaderData> CreateShaderData()
     {
-        if (UseECS)
+        var shaderData = new List<BoidShaderData>();
+
+        for (int i = 0; i < Boids.Count; i++)
         {
-            for (int i = 0; i < Boids.Count; i++)
-            {
-                var boid = Boids[i];
+            var boid = Boids[i];
 
-                boid.AvgSpeedMod = AvgSpeedMod;
-                boid.CohesionMod = CohesionMod;
-                boid.SeparationMod = SeparationMod;
+            var inRange = Octree
+                  .Query(new Bounds(boid.Pos, Vector3.one * boid.PerceptionRadius), MaxNeighBours);
 
-                boid.CurPos = Vector3.Lerp(boid.CurPos, boid.Pos, 1f / (Amount / BoidUpdateBatchSize));
-
-                Boids[i] = boid;
-            }
-
-            ExecuteJob(Boids.ToArray());
-        }
-        else
-        {
-            Octree = new Octree<Boid>(OctreeCapacity, Bounds.bounds);
-
-            var boidCopies = new List<Boid>();
-
-            for (int i = 0; i < Boids.Count; i++)
-            {
-                var boid = Boids[i];
-
-                boid.AvgSpeedMod = AvgSpeedMod;
-                boid.CohesionMod = CohesionMod;
-                boid.SeparationMod = SeparationMod;
-
-                Octree.InsertPoint(new OctreeData<Boid>()
-                {
-                    Point = boid.Pos,
-                    AttachedObject = boid
-                });
-
-                boidCopies.Add(boid);
-
-                Boids[i] = boid;
-            }
-
-            for (int i = 0; i < Boids.Count; i++)
-            {
-                var boid = Boids[i];
-
-                if (UseOctree)
-                {
-                    var inRange = Octree
-                        .Query(new Bounds(boid.Pos, Vector3.one * boid.PerceptionRadius), MaxNeighBours);
-
-                    boid.Acl += boid.SteeringForce(inRange);
-                }
-                else
-                {
-                    boid.Acl += boid.SteeringForce(boidCopies);
-                }
-
-                boid = ConstrainToBounds(boid);
-
-                Boids[i] = boid;
-            }
-        }
-    }
-
-    public void ExecuteJob(Boid[] boids)
-    {
-        if (_boidUpdateBatchNum == 0)
-        {
-            TempBoids = boids.ToList();
-        }
-
-        _boidUpdateBatchNum++;
-        if (_boidUpdateBatchNum * BoidUpdateBatchSize >= Boids.Count - 1)
-        {
-            _boidUpdateBatchNum = 0;
-        }
-
-        var nativeBoids = new NativeArray<Boid>(
-            TempBoids
-            .Skip(_boidUpdateBatchNum * BoidUpdateBatchSize)
-            .Take(BoidUpdateBatchSize)
-            .ToArray(), Allocator.TempJob);
-
-        var flockJob = new FlockJob()
-        {
-            Boids = nativeBoids,
-            OctreeCapacity = OctreeCapacity,
-            Bounds = Bounds.bounds,
-            MaxNeighBours = MaxNeighBours,
-            Scale = Boid.transform.localScale,
-            ModelRotation = MeshFilter.transform.rotation
-        };
-
-        var jobHandle = flockJob.Schedule(nativeBoids.Length, 128);
-        jobHandle.Complete();
-
-        for (int i = 0; i < nativeBoids.Length; i++)
-        {
-            var boid = nativeBoids[i];
-
-            boid.Update();
             boid = ConstrainToBounds(boid);
 
-            Boids[(_boidUpdateBatchNum * BoidUpdateBatchSize) + i] = boid;
+            Boids[i] = boid;
+
+            shaderData.Add(new BoidShaderData()
+            {
+                Boid = boid,
+                InRange = inRange
+            });
         }
 
-        nativeBoids.Dispose();
+        return shaderData;
     }
 
     public Boid ConstrainToBounds(Boid boid)
@@ -274,4 +216,9 @@ public class Flock : MonoBehaviour {
                 drawAmount < Boids.Count ? drawAmount : Boids.Count - 1);
         }
     }
+}
+
+public struct BoidShaderData {
+    public Boid Boid;
+    public List<OctreeData<Boid>> InRange;
 }

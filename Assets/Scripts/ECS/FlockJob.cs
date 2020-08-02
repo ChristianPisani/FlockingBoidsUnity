@@ -13,17 +13,20 @@ public struct FlockJob : IJobParallelFor {
 
     public Quaternion ModelRotation;
     public Vector3 Scale;
+    public float DeltaTime;
 
     [BurstCompile(CompileSynchronously = false)]
     public void Execute(int index)
     {        
         var boid = Boids[index];
 
-        var inRange = Flock.Octree
-            .Query(new Bounds(boid.Pos, Vector3.one * boid.PerceptionRadius), MaxNeighBours);
+        //var inRange = Flock.Octree
+        //    .Query(new Bounds(boid.Pos, Vector3.one * boid.PerceptionRadius), MaxNeighBours);
 
-        boid.Acl += boid.SteeringForce(inRange);        
+        //boid.Acl += boid.SteeringForce(inRange);
+
+        //boid.Update(DeltaTime);
         
         Boids[index] = boid;
-    }    
+    }
 }

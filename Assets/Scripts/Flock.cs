@@ -28,7 +28,7 @@ public class Flock : MonoBehaviour {
     public float CohesionMod = 1f;
     public float SeparationMod = 1f;
 
-    List<Boid> Boids;
+    NativeArray<Boid> Boids;
     List<Boid> TempBoids;
     BoxCollider Bounds;
     public Color Color;
@@ -54,7 +54,7 @@ public class Flock : MonoBehaviour {
     {
         Octree = new Octree<Boid>(OctreeCapacity, Bounds.bounds);
 
-        Boids = new List<Boid>();
+        var boids = new List<Boid>();
 
         for (int i = 0; i < Amount; i++)
         {
@@ -76,19 +76,21 @@ public class Flock : MonoBehaviour {
 
             boid.Spawn();
 
-            Boids.Add(boid);
+            boids.Add(boid);
             Octree.InsertPoint(new OctreeData<Boid>()
             {
                 Point = boid.Pos,
                 AttachedObject = boid
             });
         }
+
+        Boids = new NativeArray<Boid>(boids.ToArray(), Allocator.Persistent);
     }
 
     public void Update()
     {
         UpdateBoids();
-        Draw();
+        //Draw();
     }
 
     public void CreateOctree()
@@ -109,7 +111,7 @@ public class Flock : MonoBehaviour {
     {
         if (UseECS)
         {
-            for (int i = 0; i < Boids.Count; i++)
+            for (int i = 0; i < Boids.Length; i++)
             {
                 var boid = Boids[i];
 
@@ -117,20 +119,21 @@ public class Flock : MonoBehaviour {
                 boid.CohesionMod = CohesionMod;
                 boid.SeparationMod = SeparationMod;
 
-                boid.CurPos = Vector3.Lerp(boid.CurPos, boid.Pos, 1f / (Amount / BoidUpdateBatchSize));
+                //boid.CurPos = Vector3.Lerp(boid.CurPos, boid.Pos, 1f / (Amount / BoidUpdateBatchSize));
 
                 Boids[i] = boid;
             }
 
-            ExecuteJob(Boids.ToArray());
+            //ExecuteJob();
         }
         else
         {
+            /*
             Octree = new Octree<Boid>(OctreeCapacity, Bounds.bounds);
 
             var boidCopies = new List<Boid>();
 
-            for (int i = 0; i < Boids.Count; i++)
+            for (int i = 0; i < Boids.Length; i++)
             {
                 var boid = Boids[i];
 
@@ -169,18 +172,19 @@ public class Flock : MonoBehaviour {
 
                 Boids[i] = boid;
             }
+            */
         }
     }
 
-    public void ExecuteJob(Boid[] boids)
+    public void ExecuteJob()
     {
-        if (_boidUpdateBatchNum == 0)
+        /*if (_boidUpdateBatchNum == 0)
         {
             TempBoids = boids.ToList();
         }
 
         _boidUpdateBatchNum++;
-        if (_boidUpdateBatchNum * BoidUpdateBatchSize >= Boids.Count - 1)
+        if (_boidUpdateBatchNum * BoidUpdateBatchSize >= Boids.Length - 1)
         {
             _boidUpdateBatchNum = 0;
         }
@@ -189,32 +193,35 @@ public class Flock : MonoBehaviour {
             TempBoids
             .Skip(_boidUpdateBatchNum * BoidUpdateBatchSize)
             .Take(BoidUpdateBatchSize)
-            .ToArray(), Allocator.TempJob);
+            .ToArray(), Allocator.TempJob);*/
 
         var flockJob = new FlockJob()
         {
-            Boids = nativeBoids,
+            Boids = Boids,
             OctreeCapacity = OctreeCapacity,
             Bounds = Bounds.bounds,
             MaxNeighBours = MaxNeighBours,
             Scale = Boid.transform.localScale,
-            ModelRotation = MeshFilter.transform.rotation
+            ModelRotation = MeshFilter.transform.rotation,
+            DeltaTime = Time.deltaTime
         };
 
-        var jobHandle = flockJob.Schedule(nativeBoids.Length, 128);
+        var jobHandle = flockJob.Schedule(Boids.Length, 128);
         jobHandle.Complete();
 
-        for (int i = 0; i < nativeBoids.Length; i++)
+        for (int i = 0; i < Boids.Length; i++)
         {
-            var boid = nativeBoids[i];
+            var boid = Boids[i];
 
-            boid.Update();
-            boid = ConstrainToBounds(boid);
-
-            Boids[(_boidUpdateBatchNum * BoidUpdateBatchSize) + i] = boid;
+            //boid = ConstrainToBounds(boid);
+            
+            Boids[i] = boid;
         }
+    }
 
-        nativeBoids.Dispose();
+    private void OnDestroy()
+    {
+        Boids.Dispose();
     }
 
     public Boid ConstrainToBounds(Boid boid)
@@ -264,14 +271,14 @@ public class Flock : MonoBehaviour {
     {
         int drawAmount = 500;
 
-        for (int i = 0; i < Boids.Count; i += drawAmount)
+        for (int i = 0; i < Boids.Length; i += drawAmount)
         {
             Graphics.DrawMeshInstanced(MeshFilter.sharedMesh,
                 0,
                 Renderer.sharedMaterial,
                 Boids.Skip(i).Take(drawAmount).Select(x => x.matrix(
                     Renderer.transform.rotation, Boid.transform.localScale)).ToArray(),
-                drawAmount < Boids.Count ? drawAmount : Boids.Count - 1);
+                drawAmount < Boids.Length ? drawAmount : Boids.Length - 1);
         }
     }
 }

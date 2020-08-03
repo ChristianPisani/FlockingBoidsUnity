@@ -490,7 +490,7 @@ Camera:
     width: 1
     height: 1
   near clip plane: 0.3
-  far clip plane: 1000
+  far clip plane: 100000
   field of view: 60
   orthographic: 0
   orthographic size: 5
@@ -530,7 +530,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 534669902}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 436275a13d4459746955fc6db5953473, type: 3}
   m_Name: 
@@ -1003,22 +1003,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0aeeb90a136a1bd44a77c3210ff73b65, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Mesh: {fileID: 3613567641014311022, guid: 2efb4fda533c6e4479f43276eb7fd24b, type: 3}
+  Mesh: {fileID: 3613567641014311022, guid: c369134e2fb308245b40b6a8eac832b7, type: 3}
   Material: {fileID: 2100000, guid: 2da9323c9f090dd46a57453d678628d0, type: 2}
-  Amount: 10000
-  MaxNeighBours: 12
-  OctreeCapacity: 5
-  MaxSpeed: 5
-  MinSpeed: 1
-  MaxForce: 5
-  PerceptionRadius: 2
-  SpawnBoundsPercentage: 0.25
-  BoidScale: 0.1
+  Amount: 100000
+  MaxSpeed: 120
+  MinSpeed: 20
+  PerceptionRadius: 50
+  SpawnBoundsPercentage: 1
+  BoidScale: 1
   Debugging: 0
-  UseOctree: 1
   AvgSpeedMod: 1
-  CohesionMod: 1
-  SeparationMod: 1
+  CohesionMod: 1.55
+  SeparationMod: 2.3
+  MaxRotationDegrees: 15
+  BaseRotationX: 0
+  BaseRotationY: 0
+  BaseRotationZ: -90
 --- !u!1 &1620114019
 GameObject:
   m_ObjectHideFlags: 0

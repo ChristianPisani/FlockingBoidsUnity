@@ -12,6 +12,5 @@ public struct BoidComponent : ISharedComponentData  {
 
     public float MaxSpeed;
     public float MinSpeed;
-    public float MaxForce;
     public float PerceptionRadius;
 }

@@ -1,12 +1,12 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using System.Numerics;
+﻿using Assets.Scripts.Extensions;
+using System.Collections.Generic;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Jobs;
 using Unity.Mathematics;
 using Unity.Transforms;
+using UnityEngine;
 
 public class FlockSystem : SystemBase {
     List<BoidComponent> _boidTypes = new List<BoidComponent>();
@@ -33,7 +33,7 @@ public class FlockSystem : SystemBase {
             // Allocate memory
             ////
 
-            var velocities = new NativeArray<float>(boidCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+            var velocities = new NativeArray<float3>(boidCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
             var headings = new NativeArray<float3>(boidCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
             var positions = new NativeArray<float3>(boidCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
             var cellIndices = new NativeArray<int>(boidCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
@@ -45,7 +45,7 @@ public class FlockSystem : SystemBase {
             var initializeJobHandle = Entities
                 .WithSharedComponentFilter(boidSettings)
                 .ForEach((int entityInQueryIndex, in LocalToWorld pos, in HeadingComponent heading, in MoveComponent moveComponent) => {
-                    velocities[entityInQueryIndex] = moveComponent.Speed;
+                    velocities[entityInQueryIndex] = moveComponent.Vel.ToFloat3();
                     headings[entityInQueryIndex] = heading.Value;
                     positions[entityInQueryIndex] = pos.Position;
                 })
@@ -61,8 +61,8 @@ public class FlockSystem : SystemBase {
             var hashPositionsJobHandle = Entities
                 .WithName("HashPositionsJob")
                 .WithAll<BoidComponent>()
-                .ForEach((int entityInQueryIndex, in LocalToWorld localToWorld) => {
-                    var hash = (int)math.hash(new int3(math.floor(localToWorld.Position / boidSettings.PerceptionRadius)));
+                .ForEach((int entityInQueryIndex, in Translation translation) => {
+                    var hash = (int)math.hash(new int3(math.floor(translation.Value / boidSettings.PerceptionRadius)));
                     parallelHashMap.Add(hash, entityInQueryIndex);
                 })
                 .ScheduleParallel(Dependency);
@@ -83,7 +83,7 @@ public class FlockSystem : SystemBase {
             ////
             // Merge cells
             ////
-            
+
             var mergeCellsBarrierJobHandle = JobHandle.CombineDependencies(hashPositionsJobHandle, initializeJobHandle, initialCellCountJobHandle);
 
             var mergeCellsJob = new MergeCells
@@ -100,6 +100,42 @@ public class FlockSystem : SystemBase {
             var mergeCellsJobHandle = mergeCellsJob.Schedule(hashMap, 64, mergeCellsBarrierJobHandle);
 
             mergeCellsJobHandle.Complete();
+
+            ////
+            // Calculate new velocities
+            ////
+
+            var steeringForceJobHandle = Entities
+                .WithSharedComponentFilter(boidSettings)
+                .ForEach((int entityInQueryIndex, ref MoveComponent mover, ref Translation translation, ref Rotation rotation) => {
+                    var cellIndex = cellIndices[entityInQueryIndex];
+
+                    if(cellCount[cellIndex] != 0) {
+
+                        var cohesionVal = cellCohesion[cellIndex] / cellCount[cellIndex];
+                        var cohesion = boidSettings.CohesionMod *
+                                            math.normalizesafe(cohesionVal - translation.Value);
+
+                        var separation = boidSettings.SeparationMod
+                                                      * -1 * math.normalizesafe((translation.Value - cellSeparation[cellIndex]) / cellCount[cellIndex]);
+
+                        var alignment = boidSettings.AvgSpeedMod *
+                                            math.normalizesafe((cellAlignment[cellIndex] + cellAlignment[entityInQueryIndex]) / cellCount[cellIndex]) - mover.Vel.ToFloat3();
+
+                        var distanceFromCenter = -translation.Value / 200f;                        
+
+                        var steeringForce = alignment + separation + cohesion + distanceFromCenter;
+
+                        mover.Acl += new Vector3(steeringForce.x, steeringForce.y, steeringForce.z);
+                    }
+                })
+                .ScheduleParallel(mergeCellsJobHandle);
+
+            steeringForceJobHandle.Complete();
+
+            ////
+            // Dispose
+            ////            
 
             hashMap.Dispose();
             velocities.Dispose();
@@ -125,7 +161,7 @@ public class FlockSystem : SystemBase {
 
     [BurstCompile]
     struct MergeCells : IJobNativeMultiHashMapMergedSharedKeyIndices {
-        public NativeArray<float> velocities;
+        public NativeArray<float3> velocities;
         public NativeArray<float3> headings;
         public NativeArray<float3> positions;
         public NativeArray<int> cellIndices;
@@ -138,27 +174,18 @@ public class FlockSystem : SystemBase {
         // Resolves the distance of the nearest obstacle and target and stores the cell index.
         public void ExecuteFirst(int index)
         {
-            var position = cellSeparation[index] / cellCount[index];
-
-            /*cellObstaclePositionIndex[index] = obstaclePositionIndex;
-            cellObstacleDistance[index] = obstacleDistance;
-
-            int targetPositionIndex;
-            float targetDistance;
-            NearestPosition(targetPositions, position, out targetPositionIndex, out targetDistance);
-            cellTargetPositionIndex[index] = targetPositionIndex;*/
-
             cellIndices[index] = index;
+            cellCohesion[index] = positions[index];
+            cellAlignment[index] = velocities[index];
+            cellSeparation[index] = positions[index];
         }
 
-        // Sums the alignment and separation of the actual index being considered and stores
-        // the index of this first value where we're storing the cells.
-        // note: these items are summed so that in `Steer` their average for the cell can be resolved.
         public void ExecuteNext(int cellIndex, int index)
         {
             cellCount[cellIndex] += 1;
-            cellAlignment[cellIndex] = cellAlignment[cellIndex] + cellAlignment[index];
-            cellSeparation[cellIndex] = cellSeparation[cellIndex] + cellSeparation[index];
+            cellCohesion[cellIndex] = positions[cellIndex] + positions[index];
+            cellAlignment[cellIndex] = velocities[cellIndex] + velocities[index];
+            cellSeparation[cellIndex] = positions[cellIndex] + positions[index];
             cellIndices[index] = cellIndex;
         }
     }

@@ -1,6 +1,6 @@
-Octree
+Boids
 
-Basic Octree in Unity using Bounds for subdivisions.
+Using Unity ECS to render 100 000+ boids. 
 
-- Octree class has functionality for inserting points and querying points
-- OctreeGameObject can be used to visualize the octree, and OctreeQuerier to visualize the queries
+Uses modified parts of Unitys boid sample:
+https://github.com/Unity-Technologies/EntityComponentSystemSamples/blob/master/ECSSamples/Assets/Advanced/Boids/Scripts/BoidSystem.cs

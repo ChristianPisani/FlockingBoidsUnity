@@ -6,6 +6,6 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Scenes/SampleScene.unity
+    path: Assets/Scenes/Underwater.unity
     guid: bd5785627c2aef84ba5ed8d618e2c9b5
   m_configObjects: {}

@@ -3,6 +3,6 @@ using Unity.Mathematics;
 
 namespace Assets.Scripts.ECS {
     struct BoidTarget : IComponentData {
-        public float3 Pos;
+        public float3 Strength;
     }
 }

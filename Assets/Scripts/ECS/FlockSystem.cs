@@ -122,9 +122,10 @@ public class FlockSystem : SystemBase {
                         var alignment = boidSettings.AvgSpeedMod *
                                             math.normalizesafe((cellAlignment[cellIndex] + cellAlignment[entityInQueryIndex]) / cellCount[cellIndex]) - mover.Vel.ToFloat3();
 
-                        var distanceFromCenter = -translation.Value / 200f;                        
+                        var distanceFromCenter = -translation.Value / 50f;                        
 
-                        var steeringForce = alignment + separation + cohesion + distanceFromCenter;
+                        var steeringForce = math.normalizesafe(alignment + separation + cohesion) * 20f;
+                        steeringForce += distanceFromCenter;
 
                         mover.Acl += new Vector3(steeringForce.x, steeringForce.y, steeringForce.z);
                     }

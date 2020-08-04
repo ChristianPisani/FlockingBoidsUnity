@@ -1,6 +1,7 @@
 ﻿using Assets.Scripts;
 using Assets.Scripts.ECS;
 using Unity.Entities;
+using Unity.Mathematics;
 using Unity.Rendering;
 using Unity.Transforms;
 using UnityEngine;
@@ -21,11 +22,11 @@ public class FlockSpawner : MonoBehaviour {
     public float BoidScale = 0.1f;
 
     public bool Debugging = false;
-    
+
     public float AvgSpeedMod = 1f;
     public float CohesionMod = 1f;
     public float SeparationMod = 1f;
-    
+
     private EntityArchetype BoidArcheType;
 
     public float MaxRotationDegrees = 10f;
@@ -48,6 +49,28 @@ public class FlockSpawner : MonoBehaviour {
         GetComponents();
         SetupEntityManager();
         SpawnBoids();
+
+        var target = new BoidTarget()
+        {
+            Strength = 100f
+        };
+
+        var target2 = new BoidTarget()
+        {
+            Strength = 50f
+        };
+
+        var targetArcheType = entityManager.CreateArchetype(
+            typeof(BoidTarget),
+            typeof(Translation),
+            typeof(LocalToWorld),
+            typeof(MoveComponent)
+        );
+
+        var t = entityManager.CreateEntity(targetArcheType);
+        entityManager.AddComponentData(t, target);
+        entityManager.AddComponentData(t, new Translation() { Value = new float3(100, 0, 0) });
+        entityManager.AddComponentData(t, new MoveComponent() { Vel = new float3(0, 20, 0) });
     }
 
     void SetupEntityManager()
@@ -75,7 +98,7 @@ public class FlockSpawner : MonoBehaviour {
     }
 
     public void SpawnBoids()
-    {        
+    {
         for (int i = 0; i < Amount; i++)
         {
             var boid = CreateBoid();

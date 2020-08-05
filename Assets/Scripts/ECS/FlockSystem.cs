@@ -69,6 +69,13 @@ public class FlockSystem : SystemBase {
             })
             .ScheduleParallel(Dependency);
 
+            var initialTargetDistanceJob = new MemsetNativeArray<float3>
+            {
+                Source = targetForces,
+                Value = float3.zero
+            };
+            var initialTargetDistanceJobHandle = initialTargetDistanceJob.Schedule(boidCount, 64, Dependency);
+
             ////
             // CREATE HASHMAP
             ////
@@ -103,7 +110,7 @@ public class FlockSystem : SystemBase {
             ////
 
             var barrierJobHandle = JobHandle.CombineDependencies(hashPositionsJobHandle, initializeJobHandle, initialCellCountJobHandle);
-            var mergeCellsBarrierJobHandle = JobHandle.CombineDependencies(barrierJobHandle, targetsJobHandle);
+            var mergeCellsBarrierJobHandle = JobHandle.CombineDependencies(barrierJobHandle, targetsJobHandle, initialTargetDistanceJobHandle);
 
             var mergeCellsJob = new MergeCells
             {
@@ -212,23 +219,46 @@ public class FlockSystem : SystemBase {
             cellAlignment[index] = velocities[index];
             cellSeparation[index] = positions[index];
 
+            float minDistanceFromTarget = float.PositiveInfinity;
+            float3 targetForce = float3.zero;
+            BoidTarget closestTarget = new BoidTarget();
+
             for (int targetIndex = 0; targetIndex < targets.Length; targetIndex++)
             {
                 var target = targets[targetIndex];
 
                 var diff = positions[index] - target.Pos;
-                var distanceFromTarget = diff.ToVector3().magnitude;
+                var distanceFromTarget = math.lengthsq(diff);
 
-                var targetForce = -diff / target.Strength;
+                if (distanceFromTarget < minDistanceFromTarget)
+                {
+                    minDistanceFromTarget = distanceFromTarget;
+                    targetForce = -diff / target.Strength;
+                    closestTarget = target;
+                }
 
-                if (distanceFromTarget > target.PullDistance)
+                if(closestTarget.Push)
                 {
-                    targetForces[index] = targetForce;
+                    if (distanceFromTarget < closestTarget.PushbackDistance)
+                    {
+                        targetForces[index] -= targetForce * 100f;
+                    }
                 }
-                else if (distanceFromTarget <= target.PushbackDistance)
+            }
+
+            if (minDistanceFromTarget != float.PositiveInfinity)
+            {
+                if (!closestTarget.Push)
                 {
-                    targetForces[index] = -targetForce;
-                }
+                    if (minDistanceFromTarget > closestTarget.PullDistance)
+                    {
+                        targetForces[index] += targetForce;
+                    }
+                    else if (minDistanceFromTarget <= closestTarget.PushbackDistance)
+                    {
+                        targetForces[index] -= targetForce;
+                    }
+                }                
             }
         }
 

@@ -7,5 +7,6 @@ namespace Assets.Scripts.ECS {
         public float3 Pos;
         public float PushbackDistance;
         public float PullDistance;
+        public bool Push;
     }
 }

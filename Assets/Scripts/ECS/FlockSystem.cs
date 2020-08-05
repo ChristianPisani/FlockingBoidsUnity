@@ -117,15 +117,21 @@ public class FlockSystem : SystemBase {
                                             math.normalizesafe(cohesionVal - translation.Value);
 
                         var separation = boidSettings.SeparationMod
-                                                      * -1 * math.normalizesafe((translation.Value - cellSeparation[cellIndex]) / cellCount[cellIndex]);
+                                                      * -1 * math.normalizesafe(translation.Value - (cellSeparation[cellIndex] / cellCount[cellIndex]));
 
                         var alignment = boidSettings.AvgSpeedMod *
                                             math.normalizesafe((cellAlignment[cellIndex] + cellAlignment[entityInQueryIndex]) / cellCount[cellIndex]) - mover.Vel.ToFloat3();
 
-                        var distanceFromCenter = -translation.Value / 50f;                        
+                        var distanceFromCenter = -translation.Value / 4f;                        
 
                         var steeringForce = math.normalizesafe(alignment + separation + cohesion) * 20f;
-                        steeringForce += distanceFromCenter;
+
+                        if (translation.Value.ToVector3().magnitude > 40f)
+                        {
+                           // steeringForce += distanceFromCenter;
+                        } else
+                        {
+                        }
 
                         mover.Acl += new Vector3(steeringForce.x, steeringForce.y, steeringForce.z);
                     }
@@ -184,9 +190,9 @@ public class FlockSystem : SystemBase {
         public void ExecuteNext(int cellIndex, int index)
         {
             cellCount[cellIndex] += 1;
-            cellCohesion[cellIndex] = positions[cellIndex] + positions[index];
-            cellAlignment[cellIndex] = velocities[cellIndex] + velocities[index];
-            cellSeparation[cellIndex] = positions[cellIndex] + positions[index];
+            cellCohesion[cellIndex] += positions[index];
+            cellAlignment[cellIndex] += velocities[index];
+            cellSeparation[cellIndex] += positions[index];
             cellIndices[index] = cellIndex;
         }
     }

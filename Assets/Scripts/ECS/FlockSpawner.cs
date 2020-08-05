@@ -49,28 +49,6 @@ public class FlockSpawner : MonoBehaviour {
         GetComponents();
         SetupEntityManager();
         SpawnBoids();
-
-        var target = new BoidTarget()
-        {
-            Strength = 100f
-        };
-
-        var target2 = new BoidTarget()
-        {
-            Strength = 50f
-        };
-
-        var targetArcheType = entityManager.CreateArchetype(
-            typeof(BoidTarget),
-            typeof(Translation),
-            typeof(LocalToWorld),
-            typeof(MoveComponent)
-        );
-
-        var t = entityManager.CreateEntity(targetArcheType);
-        entityManager.AddComponentData(t, target);
-        entityManager.AddComponentData(t, new Translation() { Value = new float3(100, 0, 0) });
-        entityManager.AddComponentData(t, new MoveComponent() { Vel = new float3(0, 20, 0) });
     }
 
     void SetupEntityManager()

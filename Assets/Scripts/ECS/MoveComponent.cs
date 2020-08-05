@@ -1,8 +1,8 @@
 ﻿using Unity.Entities;
-using UnityEngine;
+using Unity.Mathematics;
 
 public struct MoveComponent : IComponentData
 {
-    public Vector3 Vel;
-    public Vector3 Acl;
+    public float3 Vel;
+    public float3 Acl;
 }

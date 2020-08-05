@@ -1,4 +1,5 @@
-﻿using Assets.Scripts.Extensions;
+﻿using Assets.Scripts.ECS;
+using Assets.Scripts.Extensions;
 using System.Collections.Generic;
 using Unity.Burst;
 using Unity.Collections;
@@ -12,6 +13,7 @@ public class FlockSystem : SystemBase {
     List<BoidComponent> _boidTypes = new List<BoidComponent>();
 
     EntityQuery _boidQuery;
+    EntityQuery _targetQuery;
 
     protected override void OnUpdate()
     {
@@ -43,13 +45,29 @@ public class FlockSystem : SystemBase {
             var cellCohesion = new NativeArray<float3>(boidCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
 
             var initializeJobHandle = Entities
-                .WithSharedComponentFilter(boidSettings)
-                .ForEach((int entityInQueryIndex, in LocalToWorld pos, in HeadingComponent heading, in MoveComponent moveComponent) => {
-                    velocities[entityInQueryIndex] = moveComponent.Vel.ToFloat3();
-                    headings[entityInQueryIndex] = heading.Value;
-                    positions[entityInQueryIndex] = pos.Position;
-                })
-                .ScheduleParallel(Dependency);
+                        .WithSharedComponentFilter(boidSettings)
+                        .ForEach((int entityInQueryIndex, in LocalToWorld pos, in HeadingComponent heading, in MoveComponent moveComponent) => {
+                            velocities[entityInQueryIndex] = moveComponent.Vel;
+                            headings[entityInQueryIndex] = heading.Value;
+                            positions[entityInQueryIndex] = pos.Position;
+                        })
+                        .ScheduleParallel(Dependency);
+
+            ////
+            // Find targets
+            ////
+
+            var targetCount = _targetQuery.CalculateEntityCount();
+
+            var targets = new NativeArray<BoidTarget>(targetCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+            var targetForces = new NativeArray<float3>(boidCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+
+            var targetsJobHandle = Entities.ForEach((int entityInQueryIndex, ref BoidTarget target, in Translation translation) => {
+                target.Pos = translation.Value;
+
+                targets[entityInQueryIndex] = target;
+            })
+            .ScheduleParallel(Dependency);
 
             ////
             // CREATE HASHMAP
@@ -84,7 +102,8 @@ public class FlockSystem : SystemBase {
             // Merge cells
             ////
 
-            var mergeCellsBarrierJobHandle = JobHandle.CombineDependencies(hashPositionsJobHandle, initializeJobHandle, initialCellCountJobHandle);
+            var barrierJobHandle = JobHandle.CombineDependencies(hashPositionsJobHandle, initializeJobHandle, initialCellCountJobHandle);
+            var mergeCellsBarrierJobHandle = JobHandle.CombineDependencies(barrierJobHandle, targetsJobHandle);
 
             var mergeCellsJob = new MergeCells
             {
@@ -95,7 +114,9 @@ public class FlockSystem : SystemBase {
                 cellCohesion = cellCohesion,
                 headings = headings,
                 positions = positions,
-                velocities = velocities
+                velocities = velocities,
+                targets = targets,
+                targetForces = targetForces
             };
             var mergeCellsJobHandle = mergeCellsJob.Schedule(hashMap, 64, mergeCellsBarrierJobHandle);
 
@@ -110,7 +131,8 @@ public class FlockSystem : SystemBase {
                 .ForEach((int entityInQueryIndex, ref MoveComponent mover, ref Translation translation, ref Rotation rotation) => {
                     var cellIndex = cellIndices[entityInQueryIndex];
 
-                    if(cellCount[cellIndex] != 0) {
+                    if (cellCount[cellIndex] != 0)
+                    {
 
                         var cohesionVal = cellCohesion[cellIndex] / cellCount[cellIndex];
                         var cohesion = boidSettings.CohesionMod *
@@ -120,21 +142,15 @@ public class FlockSystem : SystemBase {
                                                       * -1 * math.normalizesafe(translation.Value - (cellSeparation[cellIndex] / cellCount[cellIndex]));
 
                         var alignment = boidSettings.AvgSpeedMod *
-                                            math.normalizesafe((cellAlignment[cellIndex] + cellAlignment[entityInQueryIndex]) / cellCount[cellIndex]) - mover.Vel.ToFloat3();
+                                            math.normalizesafe((cellAlignment[cellIndex] + cellAlignment[entityInQueryIndex]) / cellCount[cellIndex]) - mover.Vel;
 
-                        var distanceFromCenter = -translation.Value / 4f;                        
+                        var targetForce = targetForces[cellIndex];
 
-                        var steeringForce = math.normalizesafe(alignment + separation + cohesion) * 20f;
+                        var steeringForce = math.normalizesafe(alignment + separation + cohesion) * boidSettings.MinSpeed;
 
-                        if (translation.Value.ToVector3().magnitude > 40f)
-                        {
-                           steeringForce += distanceFromCenter;
-                        } else if(translation.Value.ToVector3().magnitude > 10f)
-                        {
-                            steeringForce -= distanceFromCenter;
-                        }
+                        steeringForce += targetForce;
 
-                        mover.Acl += new Vector3(steeringForce.x, steeringForce.y, steeringForce.z);
+                        mover.Acl += steeringForce;
                     }
                 })
                 .ScheduleParallel(mergeCellsJobHandle);
@@ -154,6 +170,8 @@ public class FlockSystem : SystemBase {
             cellAlignment.Dispose();
             cellSeparation.Dispose();
             cellCohesion.Dispose();
+            targets.Dispose();
+            targetForces.Dispose();
         }
 
         _boidTypes.Clear();
@@ -164,6 +182,11 @@ public class FlockSystem : SystemBase {
         _boidQuery = GetEntityQuery(new EntityQueryDesc
         {
             All = new[] { ComponentType.ReadOnly<BoidComponent>(), ComponentType.ReadWrite<LocalToWorld>() },
+        });
+
+        _targetQuery = GetEntityQuery(new EntityQueryDesc
+        {
+            All = new[] { ComponentType.ReadOnly<BoidTarget>(), ComponentType.ReadOnly<LocalToWorld>() },
         });
     }
 
@@ -177,6 +200,8 @@ public class FlockSystem : SystemBase {
         public NativeArray<float3> cellAlignment;
         public NativeArray<float3> cellSeparation;
         public NativeArray<float3> cellCohesion;
+        [ReadOnly] public NativeArray<BoidTarget> targets;
+        public NativeArray<float3> targetForces;
 
 
         // Resolves the distance of the nearest obstacle and target and stores the cell index.
@@ -186,6 +211,25 @@ public class FlockSystem : SystemBase {
             cellCohesion[index] = positions[index];
             cellAlignment[index] = velocities[index];
             cellSeparation[index] = positions[index];
+
+            for (int targetIndex = 0; targetIndex < targets.Length; targetIndex++)
+            {
+                var target = targets[targetIndex];
+
+                var diff = positions[index] - target.Pos;
+                var distanceFromTarget = diff.ToVector3().magnitude;
+
+                var targetForce = -diff / target.Strength;
+
+                if (distanceFromTarget > target.PullDistance)
+                {
+                    targetForces[index] = targetForce;
+                }
+                else if (distanceFromTarget <= target.PushbackDistance)
+                {
+                    targetForces[index] = -targetForce;
+                }
+            }
         }
 
         public void ExecuteNext(int cellIndex, int index)

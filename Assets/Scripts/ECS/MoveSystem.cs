@@ -16,7 +16,7 @@ public class MoveSystem : SystemBase {
         .ScheduleParallel();
 
         Entities.ForEach((ref Translation translation, ref MoveComponent mover) => {
-            mover.Vel += mover.Acl;
+            mover.Vel += mover.Acl * deltaTime;
             mover.Acl = new Vector3(0,0,0);
             translation.Value = translation.Value + mover.Vel.ToFloat3() * deltaTime;
         })

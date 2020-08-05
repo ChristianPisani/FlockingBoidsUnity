@@ -128,9 +128,10 @@ public class FlockSystem : SystemBase {
 
                         if (translation.Value.ToVector3().magnitude > 40f)
                         {
-                           // steeringForce += distanceFromCenter;
-                        } else
+                           steeringForce += distanceFromCenter;
+                        } else if(translation.Value.ToVector3().magnitude > 10f)
                         {
+                            steeringForce -= distanceFromCenter;
                         }
 
                         mover.Acl += new Vector3(steeringForce.x, steeringForce.y, steeringForce.z);

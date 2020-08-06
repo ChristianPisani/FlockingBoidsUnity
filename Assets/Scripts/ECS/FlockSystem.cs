@@ -1,5 +1,4 @@
 ﻿using Assets.Scripts.ECS;
-using Assets.Scripts.Extensions;
 using System.Collections.Generic;
 using Unity.Burst;
 using Unity.Collections;
@@ -7,7 +6,6 @@ using Unity.Entities;
 using Unity.Jobs;
 using Unity.Mathematics;
 using Unity.Transforms;
-using UnityEngine;
 
 public class FlockSystem : SystemBase {
     List<BoidComponent> _boidTypes = new List<BoidComponent>();
@@ -60,7 +58,8 @@ public class FlockSystem : SystemBase {
             var targetCount = _targetQuery.CalculateEntityCount();
 
             var targets = new NativeArray<BoidTarget>(targetCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
-            var targetForces = new NativeArray<float3>(boidCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+            var targetIndexes = new NativeArray<int>(boidCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+            var avoidIndexes = new NativeArray<int>(boidCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
 
             var targetsJobHandle = Entities.ForEach((int entityInQueryIndex, ref BoidTarget target, in Translation translation) => {
                 target.Pos = translation.Value;
@@ -69,12 +68,19 @@ public class FlockSystem : SystemBase {
             })
             .ScheduleParallel(Dependency);
 
-            var initialTargetDistanceJob = new MemsetNativeArray<float3>
+            var initialTargetIndexJob = new MemsetNativeArray<int>
             {
-                Source = targetForces,
-                Value = float3.zero
+                Source = targetIndexes,
+                Value = -1
             };
-            var initialTargetDistanceJobHandle = initialTargetDistanceJob.Schedule(boidCount, 64, Dependency);
+            var initialTargetIndexJobHandle = initialTargetIndexJob.Schedule(boidCount, 64, Dependency);
+
+            var fillAvoidIndexes = new MemsetNativeArray<int>
+            {
+                Source = avoidIndexes,
+                Value = -1
+            };
+            var fillAvoidIndexesJobHandle = fillAvoidIndexes.Schedule(boidCount, 64, Dependency);
 
             ////
             // CREATE HASHMAP
@@ -110,7 +116,8 @@ public class FlockSystem : SystemBase {
             ////
 
             var barrierJobHandle = JobHandle.CombineDependencies(hashPositionsJobHandle, initializeJobHandle, initialCellCountJobHandle);
-            var mergeCellsBarrierJobHandle = JobHandle.CombineDependencies(barrierJobHandle, targetsJobHandle, initialTargetDistanceJobHandle);
+            var barrierJobHandle2 = JobHandle.CombineDependencies(barrierJobHandle, fillAvoidIndexesJobHandle, initialTargetIndexJobHandle);
+            var mergeCellsBarrierJobHandle = JobHandle.CombineDependencies(targetsJobHandle, barrierJobHandle2);
 
             var mergeCellsJob = new MergeCells
             {
@@ -123,7 +130,8 @@ public class FlockSystem : SystemBase {
                 positions = positions,
                 velocities = velocities,
                 targets = targets,
-                targetForces = targetForces
+                targetIndexes = targetIndexes,
+                avoidIndexes = avoidIndexes
             };
             var mergeCellsJobHandle = mergeCellsJob.Schedule(hashMap, 64, mergeCellsBarrierJobHandle);
 
@@ -132,7 +140,7 @@ public class FlockSystem : SystemBase {
             ////
             // Calculate new velocities
             ////
-
+            
             var steeringForceJobHandle = Entities
                 .WithSharedComponentFilter(boidSettings)
                 .ForEach((int entityInQueryIndex, ref MoveComponent mover, ref Translation translation, ref Rotation rotation) => {
@@ -151,11 +159,27 @@ public class FlockSystem : SystemBase {
                         var alignment = boidSettings.AvgSpeedMod *
                                             math.normalizesafe((cellAlignment[cellIndex] + cellAlignment[entityInQueryIndex]) / cellCount[cellIndex]) - mover.Vel;
 
-                        var targetForce = targetForces[cellIndex];
 
                         var steeringForce = math.normalizesafe(alignment + separation + cohesion) * boidSettings.MinSpeed;
 
-                        steeringForce += targetForce;
+                        var targetIndex = targetIndexes[cellIndex];
+                        if (targetIndex != -1)
+                        {
+                            var target = targets[targetIndex];
+                            steeringForce += math.normalizesafe(target.Pos - translation.Value) * target.Strength;
+                        }
+
+                        var avoidIndex = avoidIndexes[cellIndex];
+                        if (avoidIndex != -1)
+                        {
+                            var avoidForceTarget = targets[avoidIndex];
+                            var diff = (translation.Value - avoidForceTarget.Pos);
+                            
+                            if (math.lengthsq(diff) < 1f) diff = new float3(1, 1, 1);
+
+                            steeringForce = math.normalizesafe(diff) * avoidForceTarget.Strength;
+                            mover.Vel = float3.zero;
+                        }
 
                         mover.Acl += steeringForce;
                     }
@@ -178,7 +202,8 @@ public class FlockSystem : SystemBase {
             cellSeparation.Dispose();
             cellCohesion.Dispose();
             targets.Dispose();
-            targetForces.Dispose();
+            targetIndexes.Dispose();
+            avoidIndexes.Dispose();
         }
 
         _boidTypes.Clear();
@@ -208,7 +233,8 @@ public class FlockSystem : SystemBase {
         public NativeArray<float3> cellSeparation;
         public NativeArray<float3> cellCohesion;
         [ReadOnly] public NativeArray<BoidTarget> targets;
-        public NativeArray<float3> targetForces;
+        public NativeArray<int> targetIndexes;
+        public NativeArray<int> avoidIndexes;
 
 
         // Resolves the distance of the nearest obstacle and target and stores the cell index.
@@ -220,8 +246,7 @@ public class FlockSystem : SystemBase {
             cellSeparation[index] = positions[index];
 
             float minDistanceFromTarget = float.PositiveInfinity;
-            float3 targetForce = float3.zero;
-            BoidTarget closestTarget = new BoidTarget();
+            float minDistanceFromAvoider = float.PositiveInfinity;
 
             for (int targetIndex = 0; targetIndex < targets.Length; targetIndex++)
             {
@@ -230,35 +255,21 @@ public class FlockSystem : SystemBase {
                 var diff = positions[index] - target.Pos;
                 var distanceFromTarget = math.lengthsq(diff);
 
-                if (distanceFromTarget < minDistanceFromTarget)
-                {
+                if (!target.Push && 
+                    distanceFromTarget < minDistanceFromTarget &&
+                    distanceFromTarget > target.PullDistance)
+                {                    
                     minDistanceFromTarget = distanceFromTarget;
-                    targetForce = -diff / target.Strength;
-                    closestTarget = target;
+                    targetIndexes[index] = targetIndex;
                 }
 
-                if(closestTarget.Push)
+                if (target.Push && 
+                    distanceFromTarget < minDistanceFromAvoider &&
+                    distanceFromTarget < target.PushbackDistance)
                 {
-                    if (distanceFromTarget < closestTarget.PushbackDistance)
-                    {
-                        targetForces[index] -= targetForce * 100f;
-                    }
+                    minDistanceFromAvoider = distanceFromTarget;
+                    avoidIndexes[index] = targetIndex;
                 }
-            }
-
-            if (minDistanceFromTarget != float.PositiveInfinity)
-            {
-                if (!closestTarget.Push)
-                {
-                    if (minDistanceFromTarget > closestTarget.PullDistance)
-                    {
-                        targetForces[index] += targetForce;
-                    }
-                    else if (minDistanceFromTarget <= closestTarget.PushbackDistance)
-                    {
-                        targetForces[index] -= targetForce;
-                    }
-                }                
             }
         }
 

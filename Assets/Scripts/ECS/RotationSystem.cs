@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using Unity.Entities;
+using Unity.Mathematics;
 using Unity.Transforms;
 using UnityEngine;
 
@@ -19,7 +20,7 @@ namespace Assets.Scripts.ECS {
                     .WithSharedComponentFilter(rotationComponent)
                     .ForEach((ref Rotation rotation, in MoveComponent mover) => {
                         var currentRotation = rotation.Value;
-                        var wantedRotation = Quaternion.LookRotation(mover.Vel);
+                        var wantedRotation = Quaternion.LookRotation(!mover.Vel.Equals(float3.zero) ? mover.Vel : new float3(0,0,1));
 
                         rotation.Value =  Quaternion.RotateTowards(currentRotation, wantedRotation, rotationComponent.MaxDegrees);
                     })

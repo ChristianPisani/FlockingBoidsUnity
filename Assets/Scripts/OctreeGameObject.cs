@@ -28,9 +28,9 @@ public class OctreeGameObject : MonoBehaviour
 
         if (Octree.Equals(default(Octree<Boid>))) return;
 
-        //Octree = new Octree(Capacity, Bounds.bounds);
+        Octree = new Octree<Boid>(Capacity, Bounds.bounds);
 
-        //InsertRandomPoints();
+        InsertRandomPoints();
 
         Octree.Draw();
     }

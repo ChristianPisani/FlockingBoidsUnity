@@ -28,14 +28,14 @@ public struct Boid {
                     Scale);
     }
 
-    public void Update()
+    public void Update(float deltaTime)
     {
         Vel = Vector3.ClampMagnitude(Vel, MaxSpeed);
         //Acl = Vector3.ClampMagnitude(Acl, MaxForce);
 
         PrevPos = Pos;
         CurPos = Pos;
-        Pos += Vel * Time.deltaTime;
+        Pos += Vel * deltaTime;
 
         Vel += Acl;
         Acl = Vector3.zero;

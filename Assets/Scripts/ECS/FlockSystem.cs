@@ -274,7 +274,7 @@ public class FlockSystem : SystemBase {
         }
 
         public void ExecuteNext(int cellIndex, int index)
-        {
+        {            
             cellCount[cellIndex] += 1;
             cellCohesion[cellIndex] += positions[index];
             cellAlignment[cellIndex] += velocities[index];

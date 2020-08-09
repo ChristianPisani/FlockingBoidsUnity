@@ -40,7 +40,7 @@ public class Flock : MonoBehaviour {
     public bool UseECS = true;
 
     public void Start()
-    {        
+    {
         this.Bounds = GetComponent<BoxCollider>();
         MeshFilter = Boid.GetComponentInChildren<MeshFilter>();
         Renderer = Boid.GetComponentInChildren<Renderer>();
@@ -58,7 +58,7 @@ public class Flock : MonoBehaviour {
 
         for (int i = 0; i < Amount; i++)
         {
-            Vector3 rndCoords = transform.position.RandomPoint(Bounds.bounds.size * 0.1f);
+            Vector3 rndCoords = transform.position.RandomPoint(Bounds.bounds.size);
 
             var boid = new Boid()
             {
@@ -90,7 +90,7 @@ public class Flock : MonoBehaviour {
     public void Update()
     {
         UpdateBoids();
-        //Draw();
+        Draw();
     }
 
     public void CreateOctree()
@@ -124,7 +124,7 @@ public class Flock : MonoBehaviour {
                 Boids[i] = boid;
             }
 
-            //ExecuteJob();
+            ExecuteJob();
         }
         else
         {
@@ -213,8 +213,8 @@ public class Flock : MonoBehaviour {
         {
             var boid = Boids[i];
 
-            //boid = ConstrainToBounds(boid);
-            
+            boid = ConstrainToBounds(boid);
+
             Boids[i] = boid;
         }
     }
@@ -279,6 +279,11 @@ public class Flock : MonoBehaviour {
                 Boids.Skip(i).Take(drawAmount).Select(x => x.matrix(
                     Renderer.transform.rotation, Boid.transform.localScale)).ToArray(),
                 drawAmount < Boids.Length ? drawAmount : Boids.Length - 1);
+        }
+
+        if (Debugging)
+        {
+            Octree.Draw();
         }
     }
 }

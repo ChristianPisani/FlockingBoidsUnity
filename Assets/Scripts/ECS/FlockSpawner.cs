@@ -129,7 +129,8 @@ public class FlockSpawner : MonoBehaviour {
 
         entityManager.AddComponentData(boidEntity, new MoveComponent()
         {
-            Acl = Random.onUnitSphere * Random.Range(MinSpeed, MaxSpeed)
+            Acl = Vector3.zero
+            //Acl = Random.onUnitSphere * Random.Range(MinSpeed, MaxSpeed)
         });
 
         entityManager.AddComponentData(boidEntity, new HeadingComponent()

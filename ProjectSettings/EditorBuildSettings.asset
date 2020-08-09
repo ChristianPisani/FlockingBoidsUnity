@@ -8,4 +8,7 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Underwater.unity
     guid: bd5785627c2aef84ba5ed8d618e2c9b5
+  - enabled: 0
+    path: Assets/BrokenVector/LowPolyRoadPack/Demo/Low Poly Road Pack Demo.unity
+    guid: 8d68a8c139112ee4387ec230ac89a4a2
   m_configObjects: {}

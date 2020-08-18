@@ -1,6 +1,30 @@
-Boids
+# Unity Boids
 
-Using Unity ECS to render 100 000+ boids. 
+100 000 fish boids interacting using Unity ECS.
 
-Uses modified parts of Unitys boid sample:
-https://github.com/Unity-Technologies/EntityComponentSystemSamples/blob/master/ECSSamples/Assets/Advanced/Boids/Scripts/BoidSystem.cs
+#### Video of boids in action:
+* https://www.youtube.com/watch?v=Ci1WWoc2kkc&t=10s
+
+Inspired by Codetrain's video on boids and quadtrees:
+* https://www.youtube.com/watch?v=mhjuu...
+* https://www.youtube.com/watch?v=OJxEc...
+
+And Sebastian Lagues video on boids:
+* https://www.youtube.com/watch?v=bqtql...
+
+Also includes a version made with Octree and normal Unity GameObjects for performance comparison.
+
+#### Unity assets used:
+* https://assetstore.unity.com/packages...
+* https://assetstore.unity.com/packages...
+* https://assetstore.unity.com/packages...
+* https://assetstore.unity.com/packages...
+* https://assetstore.unity.com/packages...
+
+
+#### Learning resources:
+* https://github.com/Unity-Technologies...
+* https://www.youtube.com/watch?v=p65Yt...
+* https://youtu.be/H-goqMxN0Bc
+* https://youtu.be/gibqhg0wMA0
+* https://youtu.be/lDTyCYAtQyQ
